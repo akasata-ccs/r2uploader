@@ -172,10 +172,6 @@ dist
 .wrangler/
 
 # other
-.vscode
 assets/*
 test/
-.editorconfig
-.prettierrc
 package-lock.json
-vitest.config.js
