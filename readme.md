@@ -10,6 +10,10 @@ CloudflareさんのWorker、D1、R2サービスを活用したサーバレス画
 npm install
 ```
 
+### プロジェクト作成
+```
+npm create cloudflare@latest
+```
 
 ### Cloudflareにログイン
 ```
@@ -22,7 +26,6 @@ wrangler login
 npx wrangler d1 create test  
 ```
 レスポンスの情報をwrangler.jsonc ファイルの `d1_databases` に設定する。
-
 
 ### R2バケットを作成
 ```
@@ -37,6 +40,22 @@ npx wrangler secret put AUTH_KEY_SECRET
 ```
 `? Enter a secret value: »` `<設定する値>`
 
+### プロジェクト適用
+このリポジトリの
+- `index.js` に書き換える
+- `uploadfile.js` をコピーする
+- `*_example.*` ファイルの中身を生成されたファイルに適用する。
+
+### デプロイ
+```
+npm deploy
+```
+wrangler資源をデプロイします。
+
+```
+npm dest
+```
+assetsに置いた静的資源をバケットに転送します。
 
 ## エンドポイント
 ### `/upload (PUT)`

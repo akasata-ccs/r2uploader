@@ -2,7 +2,7 @@
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
-{
+ {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "r2uploader",
 	"main": "src/index.js",
@@ -13,14 +13,15 @@
   "r2_buckets": [
     {
       "binding": "MY_BUCKET",
-      "bucket_name": "",
+      "bucket_name": "r2-uploader-akasata-ccs",
+      "preview_bucket_name": "r2-uploader-akasata-ccs"
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "",
-      "database_id": ""
+      "database_name": "r2-uploader",
+      "database_id": "5cbc142f-42e2-4f05-ab15-aaa8c850c29c"
     }
   ],
   "triggers": {
