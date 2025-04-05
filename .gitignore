@@ -177,6 +177,5 @@ assets/*
 test/
 .editorconfig
 .prettierrc
-wrangler.*
 package-lock.json
 vitest.config.js
