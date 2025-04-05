@@ -1,0 +1,31 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "r2uploader",
+	"main": "src/index.js",
+	"compatibility_date": "2025-03-03",
+	"observability": {
+		"enabled": true
+	},
+  "r2_buckets": [
+    {
+      "binding": "MY_BUCKET",
+      "bucket_name": "",
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "",
+      "database_id": ""
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "0 1 * * *"
+    ]
+  }
+}

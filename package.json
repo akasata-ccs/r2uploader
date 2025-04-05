@@ -1,0 +1,22 @@
+{
+	"name": "R2Uploader",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy && node uploadFile.js",
+		"dest": "node uploadFile.js",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"test": "vitest"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.6.4",
+		"vitest": "~2.1.9",
+		"wrangler": "^4.7.2"
+	},
+	"dependencies": {
+		"jszip": "^3.10.1",
+		"liquidjs": "^10.21.0",
+		"pako": "^2.1.0"
+	}
+}
