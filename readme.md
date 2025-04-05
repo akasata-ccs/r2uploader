@@ -5,9 +5,9 @@ CloudflareさんのWorker、D1、R2サービスを活用したサーバレス画
 # ハウツー
 前提：npmが使えること
 
-### モジュール取得
+### wranglerインストール
 ```
-npm install
+npm install -g wrangler
 ```
 
 ### Cloudflareにログイン

@@ -178,6 +178,5 @@ test/
 .editorconfig
 .prettierrc
 wrangler.*
-package.json
 package-lock.json
 vitest.config.js
