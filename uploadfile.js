@@ -6,7 +6,7 @@ const path = require('path');
 const localDir = './assets'; // アップロードしたいディレクトリのパスを指定
 
 // R2バケット名とターゲットディレクトリ（R2バケット内の保存場所）
-const bucketName = 'r2-uploader-akasata-ccs'; // R2のバケット名
+const bucketName = ''; // R2のバケット名
 const targetDir = 'assets'; // R2バケット内での保存先ディレクトリ
 
 // 指定したディレクトリ内のすべてのファイルを取得

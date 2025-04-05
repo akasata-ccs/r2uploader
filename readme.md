@@ -20,12 +20,7 @@ wrangler login
 ```
 npm create cloudflare@latest
 ```
-
-### プロジェクト適用
-このリポジトリの
-- `index.js` に書き換える
-- `uploadfile.js` をコピーする
-- `*_example.*` ファイルの中身を生成されたファイルに適用する。
+テンプレートとしてこのリポジトリを指定します。
 
 ### D1データベースを作成
 ```
@@ -39,6 +34,7 @@ npx wrangler r2 bucket create <BacketName>
 ```
 
 レスポンスの情報をwrangler.jsonc ファイルの `r2_buckets` に設定する。
+`uploadfile.js`の`bucketName`にもバケット名を記入しておく。
 
 ### アップロード用のシークレットキーを設定する
 ```
