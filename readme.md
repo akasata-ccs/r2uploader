@@ -21,6 +21,7 @@ wrangler login
 npm create cloudflare@latest
 ```
 テンプレートとしてこのリポジトリを指定します。
+作成できたら、そのディレクトリに入っておく。
 
 ### D1データベースを作成
 ```
