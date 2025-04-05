@@ -10,16 +10,22 @@ CloudflareさんのWorker、D1、R2サービスを活用したサーバレス画
 npm install
 ```
 
-### プロジェクト作成
-```
-npm create cloudflare@latest
-```
-
 ### Cloudflareにログイン
 ```
 wrangler login
 ```
 ブラウザが開くのでログインする
+
+### プロジェクト作成
+```
+npm create cloudflare@latest
+```
+
+### プロジェクト適用
+このリポジトリの
+- `index.js` に書き換える
+- `uploadfile.js` をコピーする
+- `*_example.*` ファイルの中身を生成されたファイルに適用する。
 
 ### D1データベースを作成
 ```
@@ -39,12 +45,6 @@ npx wrangler r2 bucket create <BacketName>
 npx wrangler secret put AUTH_KEY_SECRET
 ```
 `? Enter a secret value: »` `<設定する値>`
-
-### プロジェクト適用
-このリポジトリの
-- `index.js` に書き換える
-- `uploadfile.js` をコピーする
-- `*_example.*` ファイルの中身を生成されたファイルに適用する。
 
 ### デプロイ
 ```
