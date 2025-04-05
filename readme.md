@@ -45,14 +45,9 @@ npx wrangler secret put AUTH_KEY_SECRET
 
 ### デプロイ
 ```
-npm deploy
+npm run deploy
 ```
 wrangler資源をデプロイします。
-
-```
-npm dest
-```
-assetsに置いた静的資源をバケットに転送します。
 
 ## エンドポイント
 ### `/upload (PUT)`
@@ -128,7 +123,7 @@ imageとしてレスポンスします。画像ファイルが置かれている
 
 ## 資源の配置
 ### 手順
-1. `assets` ディレクトリを作成し、R2バケットに配置します。  
+1. `assets` ディレクトリを作成し、静的資源を配置します。  
 2. `npm run dest` を実行すると、バケットに資源を転送します。
 ### tips
 - この資源は `/assets/*` で静的資源として読み込みができます。  
