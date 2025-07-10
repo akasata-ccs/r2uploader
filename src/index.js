@@ -1,7 +1,7 @@
 const hasValidHeader = (request, env) => {
 	return request.headers.get('X-Custom-Auth-Key') === env.AUTH_KEY_SECRET;
 };
-//SELECT * from images where expire_date < strftime('%s', current_timestamp) * 1000
+
 function authorizeRequest(request, env, key) {
 	switch (request.method) {
 		case 'PUT':
@@ -15,12 +15,32 @@ function authorizeRequest(request, env, key) {
 
 export default {
 	async scheduled(event, env, ctx) {
-		if (1) {
-			const results = await env.DB.prepare(`SELECT file_name FROM images WHERE expire_date < strftime('%s', current_timestamp)`).all();
-			for (filename in results) {
-				await env.MY_BUCKET.delete(filename);
+		if (true) {
+			const { results } = await env.DB.prepare(`SELECT file_name FROM images WHERE expire_date < strftime('%s', current_timestamp)`).all();
+			const successfullyDeleted = [];
+
+			for (const row of results) {
+				try {
+					await env.MY_BUCKET.delete(row.file_name);
+					successfullyDeleted.push(row.file_name);
+					console.log(`Successfull to delete file: ${row.file_name}`);
+				} catch (e) {
+					console.error(`Failed to delete file: ${row.file_name}`, e);
+				}
 			}
-			return new Response('Deleted!');
+
+			if (successfullyDeleted.length > 0) {
+				const chunked = chunkArray(successfullyDeleted, 20)
+				for (const chunk of chunked) {
+					const placeholders = chunk.map(() => '?').join(',')
+					await env.DB
+						.prepare(`
+						DELETE FROM images
+						WHERE file_name IN (${placeholders})
+					`)
+						.bind(...chunk).run()
+				}
+			}
 		}
 	},
 	async fetch(request, env) {
