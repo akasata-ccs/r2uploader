@@ -16,7 +16,16 @@ function authorizeRequest(request, env, key) {
 export default {
 	async scheduled(event, env, ctx) {
 		if (true) {
-			const { results } = await env.DB.prepare(`SELECT file_name FROM images WHERE expire_date < strftime('%s', current_timestamp)`).all();
+			const res = await env.DB.prepare(`
+				SELECT file_name
+				FROM images
+				WHERE expire_date < strftime('%s', current_timestamp)
+				ORDER BY file_name ASC
+				LIMIT 20
+				`).all();
+			const results = res?.results;
+			if (!results || results.length === 0) return;
+
 			const successfullyDeleted = [];
 
 			for (const row of results) {
@@ -30,16 +39,13 @@ export default {
 			}
 
 			if (successfullyDeleted.length > 0) {
-				const chunked = chunkArray(successfullyDeleted, 20)
-				for (const chunk of chunked) {
-					const placeholders = chunk.map(() => '?').join(',')
-					await env.DB
-						.prepare(`
+				const placeholders = successfullyDeleted.map(() => '?').join(',')
+				await env.DB
+					.prepare(`
 						DELETE FROM images
 						WHERE file_name IN (${placeholders})
 					`)
-						.bind(...chunk).run()
-				}
+					.bind(...successfullyDeleted).run()
 			}
 		}
 	},
