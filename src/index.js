@@ -21,7 +21,7 @@ export default {
 				FROM images
 				WHERE expire_date < strftime('%s', current_timestamp)
 				ORDER BY file_name ASC
-				LIMIT 20
+				LIMIT 100
 				`).all();
 			const results = res?.results;
 			if (!results || results.length === 0) return;
@@ -55,53 +55,6 @@ export default {
 
 		if (request.method === 'GET') {
 
-			if (/^\/robots.txt$/.test(url.pathname)) {
-				return new Response(`User-agent: Twitterbot
-Disallow:
-
-User-agent: Discordbot
-Disallow: 
-
-User-agent: *
-Disallow: /
-`, {
-					headers: {
-						'Content-Type': 'text/plain'
-					}
-				});
-			}
-			if (/^\/assets\/|^\/favicon.ico$/.test(url.pathname)) {
-				const assetsPath = /^\/favicon.ico$/.test(url.pathname) ?
-					`assets${url.pathname}` :
-					url.pathname.slice(1);
-				const object = await env.MY_BUCKET.get(assetsPath);
-				if (object === null) {
-					return new Response('Object Not Found');
-				}
-				if (url.pathname.endsWith('.mjs')) {
-					return new Response(object.body, { headers: { 'Content-Type': 'application/javascript' } });
-				}
-				const headers = new Headers();
-				object.writeHttpMetadata(headers);
-				headers.set('etag', object.httpEtag);
-				return new Response(object.body, {
-					headers,
-				});
-
-			}
-
-			if (/^\/$|^\/[a-z0-9]{8,10}($|\/)/.test(url.pathname)) {
-				const object = await env.MY_BUCKET.get('assets/index.html');
-				if (object === null) {
-					return new Response('Object Not Found');
-				}
-				return new Response(object.body, {
-					headers: {
-						'Content-Type': 'text/html; charset=UTF-8', // HTMLを返す
-						'Cache-Control': 'no-store'
-					}
-				});
-			}
 			if (/^\/api\/[a-z0-9]{8,10}$/.test(url.pathname)) {
 				const groupName = url.pathname.split('/').slice(-1)[0];
 				const results = await env.DB.prepare(`SELECT *, strftime('%Y年%m月%d日', expire_date, 'unixepoch') as parse_expire_date FROM images WHERE group_name = ? AND expire_date > strftime('%s', current_timestamp)`)
@@ -150,7 +103,10 @@ Disallow: /
 					headers: { 'Content-Type': imageResponse.headers.get('Content-Type') }
 				});
 			}
+
+			return env.ASSETS.fetch(request);
 		}
+
 
 		if (!authorizeRequest(request, env, key) || !/^\/upload$/.test(url.pathname)) {
 			return new Response('Forbidden', { status: 403 });
