@@ -173,5 +173,7 @@ dist
 
 # other
 assets/*
+!assets/robots.txt
 test/
 package-lock.json
+wrangler.jsonc
