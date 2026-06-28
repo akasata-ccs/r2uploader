@@ -52,6 +52,7 @@ export default {
 		}
 	},
 	async fetch(request, env) {
+		const url = new URL(request.url);
 
 		if (request.method === 'GET') {
 
@@ -123,7 +124,7 @@ export default {
 		}
 
 		switch (request.method) {
-			case 'PUT':
+			case 'PUT': {
 				const now = Date.now();
 				const origName = request.headers.get('X-Custom-Orig-Name') ?? 'null';
 				const requestGroupName = request.headers.get('X-Custom-Group-Name');
@@ -175,7 +176,8 @@ export default {
 					.first();
 
 				return Response.json({ status: 'OK', message: `Put successfully!`, origName: result.orig_name, groupName: result.group_name, length: result.length });
-			case 'DELETE':
+			}
+			case 'DELETE': {
 				const origName = request.headers.get('X-Custom-Orig-Name') || null;
 				const groupName = request.headers.get('X-Custom-Group-Name');
 				if (groupName) {
@@ -203,7 +205,7 @@ export default {
 					)
 					.all();
 
-				results.forEach(entries => {
+				results.forEach(async (entries) => {
 					await env.MY_BUCKET.delete(entries.file_name);
 				});
 
@@ -215,7 +217,7 @@ export default {
 					})
 				});
 				return new Response('Deleted!');
-
+			}
 			default:
 				return new Response('Method Not Allowed', {
 					status: 405,
