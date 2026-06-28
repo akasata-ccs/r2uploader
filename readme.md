@@ -35,7 +35,6 @@ npx wrangler r2 bucket create <BacketName>
 ```
 
 レスポンスの情報をwrangler.jsonc ファイルの `r2_buckets` に設定する。
-`uploadfile.js`の`bucketName`にもバケット名を記入しておく。
 
 ### アップロード用のシークレットキーを設定する
 ```
@@ -88,6 +87,20 @@ Invoke-Restmethod `
     } `
       -uri "<ドメイン>/upload";
 ```
+
+### `/upload (DELETE)`
+手動削除用。グループから取り除くときに。
+1度に1ファイル送信します。
+
+リクエストヘッダー：
+
+- `X-Custom-Auth-Key (require)`
+  - シークレットキーです。設定した値をセットします。
+- `X-Custom-Orig-Name`
+  - 対象のオリジナル名です。省略するとグループ全体が対象になります。
+- `X-Custom-Group-Name (require)`
+  - 対象のファイルが属しているグループです。
+
 
 ### `/api/<グループ名> (GET)`
 指定したグループ名でアップロードされたファイルがあれば、その一覧を返します。

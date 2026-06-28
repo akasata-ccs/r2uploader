@@ -31,7 +31,8 @@
     "run_worker_first": [
       "/api/*",
       "/image/*",
-      "/thumb/*"
+      "/thumb/*",
+      "/upload"
     ]
   },
   "triggers": {

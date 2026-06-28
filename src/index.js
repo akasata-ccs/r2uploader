@@ -2,12 +2,11 @@ const hasValidHeader = (request, env) => {
 	return request.headers.get('X-Custom-Auth-Key') === env.AUTH_KEY_SECRET;
 };
 
-function authorizeRequest(request, env, key) {
+function authorizeRequest(request, env) {
 	switch (request.method) {
 		case 'PUT':
 		case 'DELETE':
 			return hasValidHeader(request, env);
-		case 'GET':
 		default:
 			return false;
 	}
@@ -42,22 +41,33 @@ export default {
 				const placeholders = successfullyDeleted.map(() => '?').join(',')
 				await env.DB
 					.prepare(`
-						DELETE FROM images
-						WHERE file_name IN (${placeholders})
+				        DELETE
+						FROM
+						    images
+						WHERE
+							file_name IN (${placeholders})
 					`)
 					.bind(...successfullyDeleted).run()
 			}
 		}
 	},
 	async fetch(request, env) {
-		const url = new URL(request.url);
-		const key = url.pathname.slice(1);
 
 		if (request.method === 'GET') {
 
 			if (/^\/api\/[a-z0-9]{8,10}$/.test(url.pathname)) {
 				const groupName = url.pathname.split('/').slice(-1)[0];
-				const results = await env.DB.prepare(`SELECT *, strftime('%Y年%m月%d日', expire_date, 'unixepoch') as parse_expire_date FROM images WHERE group_name = ? AND expire_date > strftime('%s', current_timestamp)`)
+				const results = await env.DB.prepare(`
+						SELECT
+							*,
+							strftime('%Y年%m月%d日', expire_date, 'unixepoch') as parse_expire_date
+						FROM
+							images
+						WHERE
+							group_name = ? 
+						AND
+							expire_date > strftime('%s', current_timestamp)
+					`)
 					.bind(groupName)
 					.all();
 
@@ -108,38 +118,102 @@ export default {
 		}
 
 
-		if (!authorizeRequest(request, env, key) || !/^\/upload$/.test(url.pathname)) {
+		if (!authorizeRequest(request, env) || !/^\/upload$/.test(url.pathname)) {
 			return new Response('Forbidden', { status: 403 });
 		}
 
 		switch (request.method) {
 			case 'PUT':
+				const now = Date.now();
 				const origName = request.headers.get('X-Custom-Orig-Name') ?? 'null';
 				const requestGroupName = request.headers.get('X-Custom-Group-Name');
-				const groupName = requestGroupName && requestGroupName !== '' ? requestGroupName : ((new Date()).getTime() * 2 ** 10).toString(36);
-				const fileName = String((new Date()).getTime());
-				const isExist = await env.DB.prepare(`SELECT count(*) AS count FROM images WHERE orig_name = ? AND group_name = ?`)
+				const groupName = requestGroupName || (now * 2 ** 10).toString(36);
+				const fileName = String(now);
+				const isExist = await env.DB.prepare(`
+						SELECT
+							count(*) AS count
+						FROM
+							images
+						WHERE
+							orig_name = ?
+						AND
+							group_name = ?
+					`)
 					.bind(origName, groupName)
-					.all();
+					.first();
 				if (isExist.results[0].count > 0) {
-					return Response.json({ status: 'NG', reason: 'Exist', message: `Exist "${origName}" by "${groupName}".`, name: origName, groupName: groupName });
+					return Response.json({ status: 'NG', reason: 'Exist', message: `Exist "${origName}" by "${groupName}".`, name: origName, groupName });
 				}
 
 				await env.MY_BUCKET.put(fileName, request.body);
 				const object = await env.MY_BUCKET.head(fileName);
 				const length = object.size; // ファイルサイズ (バイト単位)
 
-				await env.DB.prepare(`INSERT INTO images (file_name, orig_name, group_name, expire_date, length)
-					VALUES (?, ?, ?, strftime('%s', date('now', '+14 days'), '23:59:59'), ?)`)
+				const result = await env.DB.prepare(`
+						INSERT INTO images (
+							file_name,
+							orig_name,
+							group_name,
+							expire_date,
+							length
+						)
+						VALUES (
+							?,
+							?,
+							?,
+							strftime('%s', date('now', '+60 days'), '23:59:59'),
+							?
+						)
+						RETURNING
+							file_name,
+							orig_name,
+							group_name,
+							expire_date,
+							length
+					`)
 					.bind(fileName, origName, groupName, length)
+					.first();
+
+				return Response.json({ status: 'OK', message: `Put successfully!`, origName: result.orig_name, groupName: result.group_name, length: result.length });
+			case 'DELETE':
+				const origName = request.headers.get('X-Custom-Orig-Name') || null;
+				const groupName = request.headers.get('X-Custom-Group-Name');
+				if (groupName) {
+					return new Response('Required header is missing.', {
+						status: 405,
+					});
+				}
+				const results = await env.DB.prepare(`
+					DELETE
+					FROM
+						images
+					WHERE
+						group_name = ?
+					AND
+						(? IS NULL OR orig_name = ?)
+					RETURNING
+						file_name,
+						orig_name,
+						group_name
+					`)
+					.bind(
+						groupName,
+						origName,
+						origName
+					)
 					.all();
 
-				return Response.json({ status: 'OK', message: `Put ${key} successfully!`, name: origName, groupName: groupName, length: length });
-			case 'DELETE':
-				await env.MY_BUCKET.delete(key);
-				await env.DB.prepare(`DELETE FROM images WHERE file_name = ?`)
-					.bind(key)
-					.all();
+				results.forEach(entries => {
+					await env.MY_BUCKET.delete(entries.file_name);
+				});
+
+				return Response.json({
+					status: 'OK',
+					message: `Delete successfully!`,
+					entries: results.map(row => {
+						return { origName: row.orig_name, groupName: row.group_name }
+					})
+				});
 				return new Response('Deleted!');
 
 			default:
