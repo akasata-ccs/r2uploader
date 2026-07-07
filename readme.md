@@ -1,113 +1,181 @@
-# これは何？
-CloudflareさんのWorker、D1、R2サービスを活用したサーバレス画像アップローダーAPI。  
-ガワは自作するか[パクって](https://upload.takayama345.net)ください。
+# Serverless Image Uploader
 
-# ハウツー
-前提：npmが使えること
+Cloudflare **Workers + D1 + R2** を利用した、サーバーレス画像アップローダーAPIです。
 
-### wranglerインストール
-```
+画像のアップロード・一覧取得・削除・サムネイル生成をシンプルなAPIとして提供します。
+
+フロントエンドは含まれていません。
+自作するか、デモサイトを参考にしてください。
+
+デモ：https://upload.takayama345.net
+
+---
+
+# 特徴
+
+* Cloudflare Workersのみで動作
+* R2へ画像を保存
+* D1で画像情報を管理
+* サムネイル生成対応
+* グループ単位で画像を管理
+* 有効期限付き画像
+* 期限切れ画像を自動削除
+* シークレットキーによるアップロード制限
+
+---
+
+# 動作環境
+
+* Node.js
+* npm
+* Cloudflareアカウント
+* Wrangler CLI
+
+---
+
+# セットアップ
+
+## 1. Wranglerをインストール
+
+```bash
 npm install -g wrangler
 ```
 
-### Cloudflareにログイン
-```
+---
+
+## 2. Cloudflareへログイン
+
+```bash
 wrangler login
 ```
-ブラウザが開くのでログインする
 
-### プロジェクト作成
-```
+ブラウザが開くのでCloudflareへログインします。
+
+---
+
+## 3. プロジェクトを作成
+
+```bash
 npm create cloudflare@latest
 ```
-テンプレートとしてこのリポジトリを指定します。
-作成できたら、そのディレクトリに入っておく。
 
-### D1データベースを作成
-```
-npx wrangler d1 create test  
-```
-レスポンスの情報をwrangler.jsonc ファイルの `d1_databases` に設定する。
+テンプレートとしてこのリポジトリを指定してください。
 
-### R2バケットを作成
-```
-npx wrangler r2 bucket create <BacketName>
+作成後、プロジェクトディレクトリへ移動します。
+
+---
+
+## 4. D1データベースを作成
+
+```bash
+npx wrangler d1 create image-db
 ```
 
-レスポンスの情報をwrangler.jsonc ファイルの `r2_buckets` に設定する。
+実行後に表示される内容の `d1_databases` を `wrangler.jsonc` に追加します。
 
-### アップロード用のシークレットキーを設定する
+---
+
+## 5. R2バケットを作成
+
+```bash
+npx wrangler r2 bucket create image-bucket
 ```
+
+実行後に表示される内容の `r2_buckets` を `wrangler.jsonc` に追加します。
+
+---
+
+## 6. シークレットキーを設定
+
+```bash
 npx wrangler secret put AUTH_KEY_SECRET
 ```
-`? Enter a secret value: »` `<設定する値>`
 
-### デプロイ
+表示されたらアップロード時に使用する認証キーを入力します。
+
 ```
+? Enter a secret value:
+```
+
+---
+
+## 7. デプロイ
+
+```bash
 npm run deploy
 ```
-wrangler資源をデプロイします。
 
-## エンドポイント
-### `/upload (PUT)`
-アップロード用のエンドポイントです。
-1度に1ファイル送信します。
-CloudFlareでプロキシする場合、フリープランでは100MBの制限があるため、アップロードの際にはこれを超えないように注意します。
+Worker・D1・R2の設定を反映してデプロイします。
 
-リクエストヘッダー：
+---
 
-- `X-Custom-Auth-Key (require)`
-  - シークレットキーです。設定した値をセットします。
-- `X-Custom-Orig-Name (require)`
-  - レスポンスで受け取るファイル名です。
-- `X-Custom-Group-Name`
-  - グループ名です。
-  - なしで送信すると、サーバー側で自動的に生成するので、2回目以降ではそれを使って送信します。
+# API
 
-レスポンス例：
-```
+## PUT `/upload`
+
+画像をアップロードします。
+
+1リクエストにつき1ファイルのみアップロードできます。
+
+### リクエストヘッダー
+
+| Header                |  必須 | 説明                                              |
+| --------------------- | :-: | ----------------------------------------------- |
+| `X-Custom-Auth-Key`   |  ✔  | 認証キー                                            |
+| `X-Custom-Orig-Name`  |  ✔  | 保存したい元ファイル名                                     |
+| `X-Custom-Group-Name` |     | グループ名。省略すると自動生成されます。以降のアップロードでは返却された値を指定してください。 |
+
+### レスポンス例
+
+```json
 {
-    status: 'OK',
-    message: `Put <バケット上に配置されたファイル名> successfully!`,
-    name: <ファイル名>,
-    groupName:　<グループ名>,
-    length: <ファイルサイズ>
+  "status": "OK",
+  "message": "Put 1743853084441 successfully!",
+  "name": "1743853084441",
+  "groupName": "hkz9t3ykn4",
+  "length": 10884814
 }
 ```
 
-リクエストサンプル（PowerShell）：
+### PowerShellサンプル
+
+```powershell
+Invoke-RestMethod `
+  -Method PUT `
+  -InFile "C:\sample.jpg" `
+  -Headers @{
+    "X-Custom-Auth-Key"   = "YOUR_SECRET"
+    "X-Custom-Orig-Name"  = "sample.jpg"
+    "X-Custom-Group-Name" = "group-name"
+  } `
+  -Uri "https://example.com/upload"
 ```
-Invoke-Restmethod `
-      -InFile <ファイルのパス> `
-      -method PUT `
-      -header @{
-      "X-Custom-Auth-Key"   = <シークレットキー>;
-      "X-Custom-Orig-Name"  = <登録したいファイル名>;
-      "X-Custom-Group-Name" = <グループ名（初回は無し）>
-    } `
-      -uri "<ドメイン>/upload";
-```
 
-### `/upload (DELETE)`
-手動削除用。グループから取り除くときに。
-1度に1ファイル送信します。
+---
 
-リクエストヘッダー：
+## DELETE `/upload`
 
-- `X-Custom-Auth-Key (require)`
-  - シークレットキーです。設定した値をセットします。
-- `X-Custom-Orig-Name`
-  - 対象のオリジナル名です。省略するとグループ全体が対象になります。
-- `X-Custom-Group-Name (require)`
-  - 対象のファイルが属しているグループです。
+アップロード済み画像を削除します。
 
+### リクエストヘッダー
 
-### `/api/<グループ名> (GET)`
-指定したグループ名でアップロードされたファイルがあれば、その一覧を返します。
-`expire_date` を過ぎると、取得できなくなります。（R2バケットからも削除します）
+| Header                |  必須 | 説明                              |
+| --------------------- | :-: | ------------------------------- |
+| `X-Custom-Auth-Key`   |  ✔  | 認証キー                            |
+| `X-Custom-Group-Name` |  ✔  | グループ名                           |
+| `X-Custom-Orig-Name`  |     | 削除する元ファイル名。省略するとグループ内すべてを削除します。 |
 
-レスポンス例：
-```
+---
+
+## GET `/api/<groupName>`
+
+指定したグループに存在する画像一覧を取得します。
+
+有効期限 (`expire_date`) を過ぎた画像は取得できません。取得時に期限切れが検出された場合は、R2からも削除されます。
+
+### レスポンス例
+
+```json
 [
   {
     "file_name": "1743853084441",
@@ -128,20 +196,71 @@ Invoke-Restmethod `
 ]
 ```
 
-### `/image/<ファイル名> (GET)`
-imageとしてレスポンスします。画像ファイルが置かれているのと同じ感覚。
+---
 
-### `/thumb/<ファイル名> (GET)`
-サムネイル用に画像を縮小してレスポンスします。一覧とか作りたいときに。
+## GET `/image/<fileName>`
 
-## 資源の配置
-### 手順
-1. exmpleのassets設定では、`assets` ディレクトリをSPA資源として参照します。
+画像をそのまま返します。
 
-# 注意点
-- フリープランによる制限
-  - アップロードリクエストは1回あたり100MBまでです。それ以上はアップロードできません。
-  - R2にアップロードできるのは1アカウントあたり10GBっぽいです。
+ブラウザから通常の画像URLと同じように利用できます。
+
+例
+
+```
+https://example.com/image/1743853084441
+```
+
+---
+
+## GET `/thumb/<fileName>`
+
+サムネイル画像を返します。
+
+一覧表示やギャラリー表示などに利用できます。
+
+`注：サムネイル機能はカスタムドメインを設定することで有効になります。`
+
+---
+
+# ディレクトリ構成
+
+```
+.
+├── assets/             # 静的ファイル
+├── src/
+├── wrangler.jsonc
+└── README.md
+```
+
+`wrangler.jsonc` の `assets` 設定では `assets` ディレクトリを静的ファイルとして配信します。
+
+---
+
+# 制限事項
+
+Cloudflare Freeプランでは以下の制限があります。
+
+* アップロードは1リクエストあたり最大100MB
+* R2ストレージ容量にはプランごとの上限があります
+
+最新の制限はCloudflare公式ドキュメントを参照してください。
+
+---
 
 # 更新履歴
-2026/06/21 静的資源のR2配置とWorkerレスポンスを廃止
+
+## 2026-06-21
+
+* 静的ファイルのR2配置を廃止
+* Workerから静的ファイルを配信する構成へ変更
+
+---
+
+# ライセンス
+
+MIT License
+
+Copyright (c) 2026 akasata_ccs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+...
