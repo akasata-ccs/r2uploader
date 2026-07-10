@@ -142,7 +142,7 @@ export default {
 					`)
 					.bind(origName, groupName)
 					.first();
-				if (isExist.results[0].count > 0) {
+				if (isExist.count > 0) {
 					return Response.json({ status: 'NG', reason: 'Exist', message: `Exist "${origName}" by "${groupName}".`, name: origName, groupName });
 				}
 
