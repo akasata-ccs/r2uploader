@@ -152,6 +152,41 @@ Invoke-RestMethod `
 ```
 
 ---
+## PATCH `/upload`
+
+ZIP保存時のファイル名を指定します。
+
+### リクエストヘッダー
+
+| Header                |  必須 | 説明                                           |
+| --------------------- | :-: | ----------------------------------------------- |
+| `X-Custom-Auth-Key`   |  ✔  | 認証キー                                         |
+| `X-Custom-Group-Title`|  ✔  | 設定するZIPのファイル名                           |
+| `X-Custom-Group-Name` |  ✔  | 設定するグループのグループ名 |
+
+### レスポンス例
+
+```json
+{
+  "status": "OK",
+  "message": "Patch successfully!"
+}
+```
+
+### PowerShellサンプル
+
+```powershell
+Invoke-RestMethod `
+  -Method PATCH `
+  -Headers @{
+    "X-Custom-Auth-Key"   = "YOUR_SECRET"
+    "X-Custom-Group-Title"  = "archive"
+    "X-Custom-Group-Name" = "group-name"
+  } `
+  -Uri "https://example.com/upload"
+```
+
+---
 
 ## DELETE `/upload`
 

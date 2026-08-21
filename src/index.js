@@ -5,6 +5,7 @@ const hasValidHeader = (request, env) => {
 function authorizeRequest(request, env) {
 	switch (request.method) {
 		case 'PUT':
+		case 'PATCH':
 		case 'DELETE':
 			return hasValidHeader(request, env);
 		default:
@@ -16,10 +17,12 @@ export default {
 	async scheduled(event, env, ctx) {
 		if (true) {
 			const res = await env.DB.prepare(`
-				SELECT file_name
-				FROM images
-				WHERE expire_date < strftime('%s', current_timestamp)
-				ORDER BY file_name ASC
+				SELECT i.file_name
+				FROM title t
+				LEFT JOIN images i
+				ON t.group_name = i.group_name
+				WHERE t.expire_date < strftime('%s', current_timestamp)
+				ORDER BY i.file_name ASC
 				LIMIT 100
 				`).all();
 			const results = res?.results;
@@ -46,8 +49,20 @@ export default {
 						    images
 						WHERE
 							file_name IN (${placeholders})
+						;
 					`)
-					.bind(...successfullyDeleted).run()
+					.bind(...successfullyDeleted).run();
+
+				await env.DB
+					.prepare(`
+				        DELETE FROM title
+						WHERE NOT EXISTS (
+							SELECT 1
+							FROM images
+							WHERE images.group_name = title.group_name
+						);
+					`)
+					.run();
 			}
 		}
 	},
@@ -56,23 +71,40 @@ export default {
 
 		if (request.method === 'GET') {
 
-			if (/^\/api\/[a-z0-9]{8,10}$/.test(url.pathname)) {
+			if (/^\/api\/[a-z0-9]{8,20}$/.test(url.pathname)) {
 				const groupName = url.pathname.split('/').slice(-1)[0];
-				const results = await env.DB.prepare(`
-						SELECT
-							*,
-							strftime('%Y年%m月%d日', expire_date, 'unixepoch') as parse_expire_date
-						FROM
-							images
-						WHERE
-							group_name = ? 
-						AND
-							expire_date > strftime('%s', current_timestamp)
+
+				const response = await env.DB.prepare(`
+					SELECT
+						t.group_title,
+						t.group_name,
+						strftime(
+							'%Y年%m月%d日',
+							t.expire_date,
+							'unixepoch'
+						) AS parse_expire_date,
+						json_group_array(
+							json_object(
+								'file_name', i.file_name,
+								'orig_name', i.orig_name,
+								'length', i.length
+							)
+						) AS images
+					FROM title AS t
+					LEFT JOIN images AS i
+						ON i.group_name = t.group_name
+					WHERE t.group_name = ?
+					GROUP BY
+						t.group_title,
+						t.group_name,
+						t.expire_date;
 					`)
 					.bind(groupName)
-					.all();
+					.first();
 
-				return Response.json(results.results);
+				const raw = response;
+				if(raw) raw.images = JSON.parse(raw?.images);
+				return Response.json(raw);
 			}
 
 			if (/^\/image\/[0-9]{13}($|\/)/.test(url.pathname)) {
@@ -120,7 +152,7 @@ export default {
 
 
 		if (!authorizeRequest(request, env) || !/^\/upload$/.test(url.pathname)) {
-			return new Response('Forbidden', { status: 403 });
+			return new Response('403 Forbidden', { status: 403 });
 		}
 
 		switch (request.method) {
@@ -128,9 +160,10 @@ export default {
 				const now = Date.now();
 				const origName = request.headers.get('X-Custom-Orig-Name') ?? 'null';
 				const requestGroupName = request.headers.get('X-Custom-Group-Name');
-				const groupName = requestGroupName || (now * 2 ** 10).toString(36);
+				let groupName = requestGroupName;
 				const fileName = String(now);
-				const isExist = await env.DB.prepare(`
+				if (groupName !== null) {
+					const isExist = await env.DB.prepare(`
 						SELECT
 							count(*) AS count
 						FROM
@@ -140,10 +173,18 @@ export default {
 						AND
 							group_name = ?
 					`)
-					.bind(origName, groupName)
-					.first();
-				if (isExist.count > 0) {
-					return Response.json({ status: 'NG', reason: 'Exist', message: `Exist "${origName}" by "${groupName}".`, name: origName, groupName });
+						.bind(origName, groupName)
+						.first();
+					if (isExist.count > 0) {
+						return Response.json({ status: 'NG', reason: 'Exist', message: `Exist "${origName}" by "${groupName}".`, name: origName, groupName });
+					}
+				}
+
+				if (groupName === null || groupName === '') {
+
+					groupName = (await env.DB.prepare(`
+						INSERT INTO title DEFAULT VALUES RETURNING group_name
+						`).first()).group_name;
 				}
 
 				await env.MY_BUCKET.put(fileName, request.body);
@@ -155,27 +196,39 @@ export default {
 							file_name,
 							orig_name,
 							group_name,
-							expire_date,
 							length
 						)
 						VALUES (
 							?,
 							?,
 							?,
-							strftime('%s', date('now', '+60 days'), '23:59:59'),
 							?
 						)
 						RETURNING
 							file_name,
 							orig_name,
 							group_name,
-							expire_date,
 							length
 					`)
 					.bind(fileName, origName, groupName, length)
 					.first();
 
 				return Response.json({ status: 'OK', message: `Put successfully!`, origName: result.orig_name, groupName: result.group_name, length: result.length });
+			}
+			case 'PATCH': {
+				const groupTitle = request.headers.get('X-Custom-Group-Title');
+				const groupName = request.headers.get('X-Custom-Group-Name');
+				if (!groupTitle || !groupName) return Response.json({ status: 'NG', message: `Either or both of 'title' and 'name' are invalid.` });
+
+				const result = await env.DB.prepare(`
+					UPDATE title SET
+						group_title = ?
+					WHERE group_name = ?;
+					`)
+					.bind(groupTitle, groupName)
+					.run();
+
+				return Response.json({ status: 'OK', message: `Patch successfully!` });
 			}
 			case 'DELETE': {
 				const origName = request.headers.get('X-Custom-Orig-Name') || null;
