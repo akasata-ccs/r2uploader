@@ -1,6 +1,6 @@
 # Serverless Image Uploader
 
-Cloudflare **Workers + D1 + R2** を利用した、サーバーレス画像アップローダーAPIです。
+Cloudflare **Workers + R2** を利用した、サーバーレス画像アップローダーAPIです。
 
 画像のアップロード・一覧取得・削除・サムネイル生成をシンプルなAPIとして提供します。
 
@@ -15,7 +15,6 @@ Cloudflare **Workers + D1 + R2** を利用した、サーバーレス画像ア�
 
 * Cloudflare Workersのみで動作
 * R2へ画像を保存
-* D1で画像情報を管理
 * サムネイル生成対応
 * グループ単位で画像を管理
 * 有効期限付き画像
@@ -65,17 +64,7 @@ npm create cloudflare@latest
 
 ---
 
-## 4. D1データベースを作成
-
-```bash
-npx wrangler d1 create image-db
-```
-
-実行後に表示される内容の `d1_databases` を `wrangler.jsonc` に追加します。
-
----
-
-## 5. R2バケットを作成
+## 4. R2バケットを作成
 
 ```bash
 npx wrangler r2 bucket create image-bucket
@@ -85,7 +74,7 @@ npx wrangler r2 bucket create image-bucket
 
 ---
 
-## 6. シークレットキーを設定
+## 5. シークレットキーを設定
 
 ```bash
 npx wrangler secret put AUTH_KEY_SECRET
@@ -99,13 +88,13 @@ npx wrangler secret put AUTH_KEY_SECRET
 
 ---
 
-## 7. デプロイ
+## 6. デプロイ
 
 ```bash
 npm run deploy
 ```
 
-Worker・D1・R2の設定を反映してデプロイします。
+Worker・R2の設定を反映してデプロイします。
 
 ---
 
@@ -122,7 +111,7 @@ Worker・D1・R2の設定を反映してデプロイします。
 | Header                |  必須 | 説明                                              |
 | --------------------- | :-: | ----------------------------------------------- |
 | `X-Custom-Auth-Key`   |  ✔  | 認証キー                                            |
-| `X-Custom-Orig-Name`  |  ✔  | 保存したい元ファイル名                                     |
+| `X-Custom-Orig-Name`  |  ✔  | 元ファイル名。空文字や空白だけの値は指定できません。                  |
 | `X-Custom-Group-Name` |     | グループ名。省略すると自動生成されます。以降のアップロードでは返却された値を指定してください。 |
 
 ### レスポンス例
@@ -130,8 +119,9 @@ Worker・D1・R2の設定を反映してデプロイします。
 ```json
 {
   "status": "OK",
-  "message": "Put 1743853084441 successfully!",
-  "name": "1743853084441",
+  "message": "Put successfully!",
+  "fileName": "hkz9t3ykn4/7f2a7d38-1c85-477d-aab5-54c7528abcde",
+  "origName": "sample.jpg",
   "groupName": "hkz9t3ykn4",
   "length": 10884814
 }
@@ -158,11 +148,23 @@ ZIP保存時のファイル名を指定します。
 
 ### リクエストヘッダー
 
-| Header                |  必須 | 説明                                           |
-| --------------------- | :-: | ----------------------------------------------- |
-| `X-Custom-Auth-Key`   |  ✔  | 認証キー                                         |
-| `X-Custom-Group-Title`|  ✔  | 設定するZIPのファイル名                           |
-| `X-Custom-Group-Name` |  ✔  | 設定するグループのグループ名 |
+| Header              | 必須 | 説明     |
+| ------------------- | :-: | -------- |
+| `X-Custom-Auth-Key` |  ✔  | 認証キー |
+
+### JSONボディ
+
+| Field        | 必須 | 説明                         |
+| ------------ | :-: | ---------------------------- |
+| `groupName`  |  ✔  | 更新するグループ名           |
+| `groupTitle` |  ✔  | ZIPファイル名（日本語使用可） |
+
+```json
+{
+  "groupName": "hkz9t3ykn4",
+  "groupTitle": "旅行写真"
+}
+```
 
 ### レスポンス例
 
@@ -178,10 +180,13 @@ ZIP保存時のファイル名を指定します。
 ```powershell
 Invoke-RestMethod `
   -Method PATCH `
+  -ContentType "application/json; charset=utf-8" `
+  -Body (@{
+    groupName = "hkz9t3ykn4"
+    groupTitle = "旅行写真"
+  } | ConvertTo-Json -Compress) `
   -Headers @{
-    "X-Custom-Auth-Key"   = "YOUR_SECRET"
-    "X-Custom-Group-Title"  = "archive"
-    "X-Custom-Group-Name" = "group-name"
+    "X-Custom-Auth-Key" = "YOUR_SECRET"
   } `
   -Uri "https://example.com/upload"
 ```
@@ -204,36 +209,31 @@ Invoke-RestMethod `
 
 ## GET `/api/<groupName>`
 
-指定したグループに存在する画像一覧を取得します。
+指定したグループに存在する画像一覧を取得します。画像はR2の `groups/<groupName>/` プレフィックスから取得します。
 
-有効期限 (`expire_date`) を過ぎた画像は取得できません。取得時に期限切れが検出された場合は、R2からも削除されます。
+アップロードから60日以上経過した画像は一覧から除外され、取得時にR2から削除されます。定期処理でも期限切れ画像を削除します。
+一覧は最大1000件です。さらに画像がある場合、`truncated` が `true` になります。
 
 ### レスポンス例
 
 ```json
-[
-  {
-    "file_name": "1743853084441",
-    "orig_name": "DSCF9293.JPG",
-    "group_name": "hkz9t3ykn4",
-    "expire_date": "1745107199",
-    "length": 10884814,
-    "parse_expire_date": "2025年04月19日"
-  },
-  {
-    "file_name": "1743853090352",
-    "orig_name": "DSCF9294.JPG",
-    "group_name": "hkz9t3ykn4",
-    "expire_date": "1745107199",
-    "length": 14116455,
-    "parse_expire_date": "2025年04月19日"
-  }
-]
+{
+  "group_title": "archive",
+  "group_name": "hkz9t3ykn4",
+  "images": [
+    {
+      "file_name": "hkz9t3ykn4/7f2a7d38-1c85-477d-aab5-54c7528abcde",
+      "orig_name": "DSCF9293.JPG",
+      "length": 10884814
+    }
+  ],
+  "truncated": false
+}
 ```
 
 ---
 
-## GET `/image/<fileName>`
+## GET `/image/<groupName>/<fileId>`
 
 画像をそのまま返します。
 
@@ -242,12 +242,12 @@ Invoke-RestMethod `
 例
 
 ```
-https://example.com/image/1743853084441
+https://example.com/image/hkz9t3ykn4/7f2a7d38-1c85-477d-aab5-54c7528abcde
 ```
 
 ---
 
-## GET `/thumb/<fileName>`
+## GET `/thumb/<groupName>/<fileId>`
 
 サムネイル画像を返します。
 
@@ -283,6 +283,11 @@ Cloudflare Freeプランでは以下の制限があります。
 ---
 
 # 更新履歴
+
+## 2026-11-02
+
+* D1使用を廃止
+* グループごとにプレフィックスパスに格納するよう変更
 
 ## 2026-06-21
 
