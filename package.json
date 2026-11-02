@@ -4,7 +4,6 @@
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
-		"dest": "node uploadFile.js",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"test": "vitest"
