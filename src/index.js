@@ -31,17 +31,6 @@ async function writeGroupMetadata(bucket, groupName, metadata) {
 	});
 }
 
-function authorizeRequest(request, env) {
-	switch (request.method) {
-		case 'PUT':
-		case 'PATCH':
-		case 'DELETE':
-			return hasValidHeader(request, env);
-		default:
-			return false;
-	}
-}
-
 export default {
 	async scheduled(event, env, ctx) {
 		let cursor;
@@ -61,6 +50,22 @@ export default {
 	},
 	async fetch(request, env) {
 		const url = new URL(request.url);
+		const uploadPath = url.pathname === '/upload';
+		const apiPath = /^\/api\/[a-z0-9]{8,20}$/.test(url.pathname);
+		const imagePath = /^\/(image|thumb)\/([a-z0-9]{8,20}\/([0-9a-f-]{36})|[0-9]{13})(\/|$)/.test(url.pathname);
+
+		if (uploadPath && !['PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+			return new Response('405 Method Not Allowed', {
+				status: 405,
+				headers: { Allow: 'PUT, PATCH, DELETE' },
+			});
+		}
+		if ((apiPath || imagePath) && request.method !== 'GET') {
+			return new Response('405 Method Not Allowed', {
+				status: 405,
+				headers: { Allow: 'GET' },
+			});
+		}
 
 		if (request.method === 'GET') {
 
@@ -85,13 +90,16 @@ export default {
 						file_name: `${groupName}/${object.key.slice(GROUP_PREFIX(groupName).length)}`,
 						orig_name: object.customMetadata?.origName ?? null,
 						length: object.size,
+						_uploadedAt: object.uploaded.getTime(),
+						_key: object.key,
 					});
 				}
 				if (expiredKeys.length) await env.MY_BUCKET.delete(expiredKeys);
+				images.sort((a, b) => a._uploadedAt - b._uploadedAt || a._key.localeCompare(b._key));
 				return Response.json({
 					group_title: group?.groupTitle ?? 'archive',
 					group_name: groupName,
-					images: images.slice(0, MAX_GROUP_IMAGES),
+					images: images.slice(0, MAX_GROUP_IMAGES).map(({ _uploadedAt, _key, ...image }) => image),
 					truncated: page.truncated || images.length > MAX_GROUP_IMAGES,
 				});
 			}
@@ -134,7 +142,11 @@ export default {
 
 				// 画像が存在しない場合、エラーレスポンスを返す
 				if (!imageResponse.ok) {
-					return new Response('画像の取得に失敗しました。', { status: 500 });
+					return new Response(imageResponse.body, {
+						status: imageResponse.status,
+						statusText: imageResponse.statusText,
+						headers: imageResponse.headers,
+					});
 				}
 
 				// 画像をレスポンスとして返す
@@ -147,7 +159,7 @@ export default {
 		}
 
 
-		if (!authorizeRequest(request, env) || !/^\/upload$/.test(url.pathname)) {
+		if (!uploadPath || !hasValidHeader(request, env)) {
 			return new Response('403 Forbidden', { status: 403 });
 		}
 
@@ -226,7 +238,7 @@ export default {
 				return new Response('Method Not Allowed', {
 					status: 405,
 					headers: {
-						Allow: 'PUT, GET, DELETE',
+						Allow: 'PUT, PATCH, DELETE',
 					},
 				});
 		}
